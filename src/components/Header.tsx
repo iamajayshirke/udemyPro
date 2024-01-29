@@ -5,12 +5,11 @@ function Header() {
   return (
     <View p="$4">
       <Heading>
-        Testing App For{' '}
-        <Heading color="$emerald400">Youtube Video Download</Heading>
+        Testing App{' '}
+        <Heading color="$amber700">Youtube Video Download</Heading>
       </Heading>
       <Text pt="$3">
-        gluestack-ui is a simple, modular and accessible component library that
-        gives you building blocks to build you React applications.
+        Simply Take Youtube Video Url As a Input And Download Video In MP4 Format
       </Text>
     </View>
   );
