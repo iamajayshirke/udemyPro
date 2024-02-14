@@ -6,10 +6,10 @@ function Header() {
     <View p="$4">
       <Heading>
         Testing App{' '}
-        <Heading color="$amber700">Youtube Video Download</Heading>
+        <Heading color="$amber700">Video Downloader</Heading>
       </Heading>
       <Text pt="$3">
-        Simply Take Youtube Video Url As a Input And Download Video In MP4 Format
+        Simply Take Video Url As a Input And Download Video In MP4 Format
       </Text>
     </View>
   );

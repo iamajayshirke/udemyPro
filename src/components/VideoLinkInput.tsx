@@ -2,27 +2,21 @@ import {
   Box,
   Button,
   ButtonText,
-  CircleIcon,
   CloseIcon,
   HStack,
   Heading,
   Icon,
-  Modal,
-  ModalBackdrop,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalHeader,
-  Radio,
-  RadioGroup,
-  RadioIcon,
-  RadioIndicator,
-  RadioLabel,
+  Popover,
+  PopoverBackdrop,
+  PopoverBody,
+  PopoverCloseButton,
+  PopoverContent,
+  PopoverHeader,
   VStack,
 } from '@gluestack-ui/themed';
-import React, {useCallback, useRef, useState} from 'react';
+import {Linking, PermissionStatus, Platform} from 'react-native';
+import React, {useRef, useState} from 'react';
 import {
-  Alert,
   Image,
   PermissionsAndroid,
   Text,
@@ -33,6 +27,8 @@ import Video from 'react-native-video';
 import RNFetchBlob from 'rn-fetch-blob';
 import Slider from '@react-native-community/slider';
 import Orientation from 'react-native-orientation-locker';
+import {PopoverArrow} from '@gluestack-ui/themed';
+import CryptoJS from 'react-native-crypto-js';
 
 const VideoLinkInput = ({link}) => {
   const [url, setUrl] = useState('');
@@ -41,19 +37,22 @@ const VideoLinkInput = ({link}) => {
   const [puased, setPaused] = useState(false);
   const [progress, setProgress] = useState(null);
   const [fullScreen, setFullScreen] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [size, setSize] = useState(undefined);
-  const sizes = ['xs', 'sm', 'md', 'lg', 'full'];
-  const [speed, setSpeed] = useState(1)
-  const handleOpen = () => {
-    // setIsOpen(true);
-    setShowModal(true);
-  };
+  const [speed, setSpeed] = useState(1);
+  const [isOpen, setIsOpen] = useState(false);
+  const {config, fs} = RNFetchBlob;
+  const fileDir = fs?.dirs?.DownloadDir;
+  const videoPath = fileDir + '/download' + '.mp4';
+  const encryptionKey = 'safeEncrypt';
+
   const handleClose = () => {
     setIsOpen(false);
   };
-
+  const handleOpen = () => {
+    setIsOpen(true);
+    // setShowModal(true);
+  };
   const ref = useRef();
   const format = seconds => {
     let mins = parseInt(seconds / 60)
@@ -62,16 +61,6 @@ const VideoLinkInput = ({link}) => {
     let secs = (Math.trunc(seconds) % 60).toString().padStart(2, '0');
     return `${mins}:${secs}`;
   };
-  const onStateChange = useCallback(state => {
-    if (state === 'ended') {
-      setPlaying(false);
-      Alert.alert('video has finished playing!');
-    }
-  }, []);
-
-  const togglePlaying = useCallback(() => {
-    setPlaying(prev => !prev);
-  }, []);
 
   const requestStoragePermission = async () => {
     try {
@@ -87,25 +76,32 @@ const VideoLinkInput = ({link}) => {
           buttonPositive: 'OK',
         },
       );
+      console.log(granted);
+      let notificationsPermissionCheck: PermissionStatus = 'granted';
+      if (Platform.Version >= '33') {
+        notificationsPermissionCheck = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+      }
+      console.log(
+        'notificationsPermissionCheck:',
+        notificationsPermissionCheck,
+      );
       if (granted === PermissionsAndroid.RESULTS.GRANTED) {
         console.log('You can use the Storage');
         downloadFile();
+      } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        // openSettings()
+        downloadFile();
       } else {
-        console.log('Storage permission denied');
+        alert('Storage permission denied');
       }
     } catch (err) {
-      console.warn(err);
+      console.log(err);
     }
   };
 
-  const handleInput = (e: {target: any}) => {
-    setUrl(e);
-  };
-
   const downloadFile = () => {
-    const {config, fs} = RNFetchBlob;
-    const date = new Date();
-    const fileDir = fs?.dirs?.DownloadDir;
     config({
       // add this option that makes response data to be stored as a file,
       // this is much more performant.
@@ -113,23 +109,63 @@ const VideoLinkInput = ({link}) => {
       addAndroidDownloads: {
         useDownloadManager: true,
         notification: true,
-        path: fileDir + '/download' + Math.floor(date.getDate()) + '.mp4',
+        path: fileDir + '/download' + '.mp4',
         description: 'file download',
       },
     })
-      .fetch('GET', url, {
-        //some headers ..
-      })
+      .fetch('GET', link)
       .then(res => {
         // the temp file path
         console.log('The file saved to ', res.path());
         alert('file downloaded successfully ');
       });
   };
+  let data = [{id: 1}, {id: 2}];
+  let ciphertext: any;
+  const encryptVideo = () => {
+    console.log('Encryt Funct');
 
-  function alert(arg0: string) {
-    throw new Error('Function not implemented.');
-  }
+    // Encrypt
+    ciphertext = CryptoJS.AES.encrypt(
+      JSON.stringify(data),
+      'sdgroup',
+    ).toString();
+    console.log(ciphertext, 'Encrypt');
+
+    // Read the video file
+    // console.log(videoPath, 'VideoPath');
+    // RNFetchBlob.fs.readStream(videoPath, 'utf8', 4048).then(stream => {
+    //   let data = '';
+    //   console.log(stream);
+    //   stream.open();
+    //   stream.onData(chunk => {
+    //     console.log(chunk, 'chunk');
+    //     data += chunk;
+    //   });
+    //   stream.onEnd(() => {
+    //     console.log(data);
+    //   });
+    // });
+    // const videoData = await fs
+    //   .readStream(videoPath, 'base64')
+    //   .then((e: any) => {
+    //     console.log(e);
+    //   });
+    // Encrypt the video data
+    // const encryptedData = CryptoJS.AES.encrypt(
+    //   videoData,
+    //   encryptionKey,
+    // ).toString();
+    // console.log(encryptedData, "Encrypted Data")
+  };
+  const decryptData = () => {
+    // Decrypt
+    let bytes = CryptoJS.AES.decrypt(ciphertext, 'sdgroup');
+    let decryptedData = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+
+    console.log(decryptedData); // [{id: 1}, {id: 2}]
+  };
+
   const onVideoClick = () => {
     setClicked(!clicked);
   };
@@ -137,25 +173,9 @@ const VideoLinkInput = ({link}) => {
   const onControlClick = () => {
     setClicked(!clicked);
   };
-  const handleClick = currentSize => {
-    setShowModal(true);
-    setSize(currentSize);
-  };
 
   return (
-    <>
-      {/* <Input
-        marginBottom={20}
-        variant="rounded"
-        size="lg"
-        isDisabled={false}
-        isInvalid={false}
-        isReadOnly={false}>
-        <InputField
-          onChangeText={handleInput}
-          placeholder="Enter Youtube Link Here"
-        />
-      </Input> */}
+    <View>
       <View
         style={{
           width: '100%',
@@ -166,16 +186,20 @@ const VideoLinkInput = ({link}) => {
           <Video
             paused={puased}
             source={{
-              uri: link,
+              // uri: link,
+              uri: videoPath,
             }}
-            style={{width: '100%', height: fullScreen ? 350 : 220}}
+            style={{
+              width: '100%',
+              height: fullScreen ? 350 : 220,
+            }}
             rate={speed}
             // muted
             ref={ref}
             onProgress={x => {
               setProgress(x);
             }}
-            resizeMode="cover"
+            resizeMode="stretch"
           />
           {clicked && (
             <TouchableOpacity
@@ -186,8 +210,10 @@ const VideoLinkInput = ({link}) => {
                 backgroundColor: 'rgba(0,0,0,.4)',
                 justifyContent: 'center',
                 alignItems: 'center',
+                // borderRadius: 20
               }}
               onPress={onControlClick}>
+              {/* Back Forword Pause */}
               <View style={{flexDirection: 'row'}}>
                 <TouchableOpacity
                   onPress={() => {
@@ -231,6 +257,7 @@ const VideoLinkInput = ({link}) => {
                   />
                 </TouchableOpacity>
               </View>
+              {/* Seek Bar */}
               <View
                 style={{
                   width: '100%',
@@ -253,7 +280,7 @@ const VideoLinkInput = ({link}) => {
                   </HStack>
 
                   <Slider
-                  value={progress.currentTime}
+                    value={progress.currentTime}
                     style={{width: '80%', height: 40}}
                     minimumValue={0}
                     maximumValue={progress.seekableDuration}
@@ -262,9 +289,11 @@ const VideoLinkInput = ({link}) => {
                     onValueChange={x => {
                       ref.current.seek(x);
                     }}
+                    thumbTintColor="red"
                   />
                 </VStack>
               </View>
+              {/* PlayBack Speed */}
               <View
                 style={{
                   width: '100%',
@@ -282,49 +311,9 @@ const VideoLinkInput = ({link}) => {
                     source={require('../../assets/speed.png')}
                     style={{width: 22, height: 22, tintColor: 'white'}}
                   />
-                  <Modal
-                    isOpen={showModal}
-                    onClose={() => {
-                      setShowModal(false);
-                    }}
-                    size="sm">
-                    <ModalBackdrop />
-                    <ModalContent>
-                      <ModalHeader>
-                        <Heading size="lg">Playback Speed</Heading>
-                        <ModalCloseButton>
-                          <Icon as={CloseIcon} />
-                        </ModalCloseButton>
-                      </ModalHeader>
-                      <ModalBody>
-                        {/* <Text size="sm">Select Speed Functionality</Text> */}
-                        <RadioGroup value={speed} onChange={setSpeed}>
-                          <HStack space="sm" gap={20} justifyContent='center' mb={10}>
-                            <Radio value={0.5}>
-                              <RadioIndicator mr="$2">
-                                <RadioIcon as={CircleIcon} />
-                              </RadioIndicator>
-                              <RadioLabel>0.5x</RadioLabel>
-                            </Radio>
-                            <Radio value={1}>
-                              <RadioIndicator mr="$2">
-                                <RadioIcon as={CircleIcon} />
-                              </RadioIndicator>
-                              <RadioLabel>1x</RadioLabel>
-                            </Radio>
-                            <Radio value={2}>
-                              <RadioIndicator mr="$2">
-                                <RadioIcon as={CircleIcon} />
-                              </RadioIndicator>
-                              <RadioLabel>2x</RadioLabel>
-                            </Radio>
-                          </HStack>
-                        </RadioGroup>
-                      </ModalBody>
-                    </ModalContent>
-                  </Modal>
                 </TouchableOpacity>
               </View>
+              {/* Maximize Screen */}
               <View
                 style={{
                   width: '100%',
@@ -352,6 +341,7 @@ const VideoLinkInput = ({link}) => {
                   />
                 </TouchableOpacity>
               </View>
+              {/* Minimize Screen */}
               <View
                 style={{
                   width: '100%',
@@ -388,20 +378,22 @@ const VideoLinkInput = ({link}) => {
       </View>
       <View
         style={{
-          width:"100%",
+          width: '100%',
           position: fullScreen ? 'absolute' : 'relative',
           top: 1,
           right: fullScreen ? 25 : 0,
           marginTop: 25,
-          display:'flex',
-          justifyContent:'flex-end',
-          alignItems:'flex-end',
-          marginBottom:20
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          marginBottom: 20,
+          paddingRight: 5,
         }}>
-        <Box justifyContent='flex-end'>
+        <Box justifyContent="flex-end">
           <Button
             onPress={() => {
-              if (url !== '') {
+              if (link !== '') {
                 requestStoragePermission();
               } else {
                 alert('Please Add URL');
@@ -412,11 +404,73 @@ const VideoLinkInput = ({link}) => {
             action="positive"
             isDisabled={false}
             isFocusVisible={false}>
-            <ButtonText>Download</ButtonText>
+            <ButtonText>Save</ButtonText>
+          </Button>
+        </Box>
+        <Box justifyContent="flex-end">
+          <Button
+            onPress={encryptVideo}
+            size="lg"
+            variant="solid"
+            action="positive"
+            isDisabled={false}
+            isFocusVisible={false}>
+            <ButtonText>Encrpyt</ButtonText>
+          </Button>
+        </Box>
+        <Box justifyContent="flex-end">
+          <Button
+            onPress={decryptData}
+            size="lg"
+            variant="solid"
+            action="positive"
+            isDisabled={false}
+            isFocusVisible={false}>
+            <ButtonText>Decrypt</ButtonText>
           </Button>
         </Box>
       </View>
-    </>
+      <Box display='flex' justifyContent='center' alignItems='center'>
+        <Text>Object Data</Text>
+        {data.map((e,i) => (
+          <Text key={i}>{e.id}</Text>
+        ))}
+        <Text>{ciphertext}</Text>
+      </Box>
+      {/* <Box>
+        <Popover
+          isOpen={isOpen}
+          onClose={handleClose}
+          onOpen={handleOpen}
+          placement="top right"
+          size="sm"
+          // initialFocusRef={}
+          trigger={triggerProps => {
+            return (
+              <Button {...triggerProps}>
+                <ButtonText>Popover</ButtonText>
+              </Button>
+            );
+          }}>
+          <PopoverBackdrop />
+          <PopoverContent>
+            <PopoverArrow />
+            <PopoverHeader>
+              <Heading size="lg">Welcome!</Heading>
+              <PopoverCloseButton>
+                <Icon as={CloseIcon} />
+              </PopoverCloseButton>
+            </PopoverHeader>
+            <PopoverBody>
+              <Text size="sm">
+                Join the product tour and start creating your own checklist. Are
+                you ready to jump in?
+              </Text>
+            </PopoverBody>
+          </PopoverContent>
+        </Popover>
+      </Box> */}
+    </View>
   );
 };
 export default VideoLinkInput;
