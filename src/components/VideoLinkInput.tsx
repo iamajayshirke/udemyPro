@@ -1,21 +1,6 @@
-import {
-  Box,
-  Button,
-  ButtonText,
-  CloseIcon,
-  HStack,
-  Heading,
-  Icon,
-  Popover,
-  PopoverBackdrop,
-  PopoverBody,
-  PopoverCloseButton,
-  PopoverContent,
-  PopoverHeader,
-  VStack,
-} from '@gluestack-ui/themed';
-import {Linking, PermissionStatus, Platform} from 'react-native';
-import React, {useRef, useState} from 'react';
+import {Box, Button, ButtonText, HStack, VStack} from '@gluestack-ui/themed';
+import {PermissionStatus, Platform} from 'react-native';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   Image,
   PermissionsAndroid,
@@ -27,8 +12,8 @@ import Video from 'react-native-video';
 import RNFetchBlob from 'rn-fetch-blob';
 import Slider from '@react-native-community/slider';
 import Orientation from 'react-native-orientation-locker';
-import {PopoverArrow} from '@gluestack-ui/themed';
 import CryptoJS from 'react-native-crypto-js';
+import RNFS from 'react-native-fs';
 
 const VideoLinkInput = ({link}) => {
   const [url, setUrl] = useState('');
@@ -41,20 +26,219 @@ const VideoLinkInput = ({link}) => {
   const [size, setSize] = useState(undefined);
   const [speed, setSpeed] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
+  const [fileArr, setFileArr] = useState([]);
+  const [base64, setBase64] = useState<String>();
   const {config, fs} = RNFetchBlob;
-  const fileDir = fs?.dirs?.DownloadDir;
-  const videoPath = fileDir + '/download' + '.mp4';
-  const encryptionKey = 'safeEncrypt';
+  const fileDir = fs?.dirs?.SDCardApplicationDir + '/files';
+  const newFileDir = fs?.dirs?.SDCardApplicationDir + '/files/newFiles';
+  console.log(fs?.dirs.CacheDir, 'Directories');
+  console.log(fs?.dirs?.SDCardApplicationDir, 'SD Card');
+  const smallFile =
+    fs?.dirs?.SDCardApplicationDir + '/files' + '/smallVideo.temp';
+  const encSmallFile =
+    fs?.dirs?.SDCardApplicationDir + '/files' + '/smallVideo.enc';
+  const decryptFile =
+    fs?.dirs?.SDCardApplicationDir + '/cache' + '/cacheVideo.mp4';
 
-  const handleClose = () => {
-    setIsOpen(false);
+  const videoPath = fileDir + '/smallVid.enc';
+  let ciphertext: any;
+  useEffect(() => {
+    console.log('Fetch');
+  }, [fs]);
+  // let data = '';
+  // console.log(base64, 'Decrypted String');
+  const encryptVideo = async () => {
+    RNFetchBlob.fs
+      .stat(smallFile)
+      .then(stats => {
+        console.log(stats, 'Statistics');
+      })
+      .catch(err => {});
+    await RNFetchBlob.fs
+      .readStream(smallFile, 'base64', 1000000, -1)
+      .then(stream => {
+        let data = '';
+        let count = 0;
+        // If Chunk Size is Less than 1.5MB Then Only Stream Opens or Else It Crashes
+        stream.open();
+        // console.log(stream)
+        stream.onData(chunk => {
+          fs.mkdir(newFileDir)
+            .then(() => {})
+            .catch(() => {});
+          console.log(chunk, 'Chunks');
+          count += 1;
+          data += chunk;
+          RNFetchBlob.fs
+            .writeStream(
+              `${fs?.dirs?.SDCardApplicationDir}/files/newFiles/smallVideo.v${count}.enc`,
+              'base64',
+            )
+            .then(stream => {
+              stream.write(RNFetchBlob.base64.encode(chunk));
+              return stream.close();
+            });
+        });
+        stream.onEnd(() => {
+          console.log(data);
+          // fs.unlink(smallFile);
+        });
+      })
+      .catch(err => {
+        console.log(err);
+      });
+    // RNFetchBlob.fs.readFile(smallFile, 'base64').then(data => {
+    //   if (data) {
+    //     let encVideo = CryptoJS.AES.encrypt(data, 'Ajay').toString();
+    //     if (encVideo) {
+    //       fs.unlink(smallFile);
+    //       RNFetchBlob.fs
+    //         .writeStream(encSmallFile, 'base64')
+    //         .then(async stream => {
+    //           const encryptVideo = stream.write(
+    //             RNFetchBlob.base64.encode(encVideo),
+    //           );
+    //           console.log(await encryptVideo, 'Encrypted Video and Encoded');
+    //           return stream.close();
+    //         });
+    //     }
+    //   }
+    //   console.log('Encryption Done');
+    // });
+  };
+  const sortFileName = (filenames: any) => {
+    return filenames.sort(function (a: string, b: string) {
+      var regex = /(\D+)|(\d+)/g;
+      var partsA = a.match(regex);
+      var partsB = b.match(regex);
+
+      while (partsA.length && partsB.length) {
+        var partA = partsA.shift();
+        var partB = partsB.shift();
+        if (isNaN(partA) && isNaN(partB)) {
+          if (partA < partB) return -1;
+          if (partA > partB) return 1;
+        } else {
+          partA = parseInt(partA) || 0;
+          partB = parseInt(partB) || 0;
+          if (partA < partB) return -1;
+          if (partA > partB) return 1;
+        }
+      }
+      return partsA.length - partsB.length;
+    });
+  };
+  async function processItem(item: any) {
+    // Simulate some asynchronous task, like fetching data or performing a computation
+    combineChunksIntoVideo(item);
+    // Simulate a delay using setTimeout
+    await new Promise(resolve => setTimeout(resolve, 1000)); // 1000 milliseconds delay
+
+    // After the delay, continue with the loop
+    console.log('Finished processing item:', item);
+  }
+  const combineChunksIntoVideo = (fileName: any) => {
+    RNFetchBlob.fs
+      .readFile(newFileDir + '/' + fileName, 'base64')
+      .then(data => {
+        const decodedData = RNFetchBlob.base64.decode(data);
+        console.log(decodedData, 'Decoded String');
+        setBase64(decodedData);
+        RNFetchBlob.fs.writeStream(decryptFile, 'base64', true).then(stream => {
+          stream.write(decodedData);
+          return stream.close();
+        });
+      });
+  };
+  const decryptData = async () => {
+    RNFetchBlob.fs
+      .ls(newFileDir)
+      // files will an array contains filenames
+      .then(files => {
+        setFileArr(files);
+      });
+    const sorted = sortFileName(fileArr);
+    for (const element of sorted) {
+      console.log(element, 'For In Loop');
+      await processItem(element);
+    }
+    // RNFetchBlob.fs
+    //   .readStream(newFileDir + '/' + fileArr[1], 'base64', 1000000, 5)
+    //   .then(stream => {
+    //     let data = '';
+    //     stream.open();
+    //     stream.onData(chunk => {
+    //       data += chunk;
+    //       console.log(data)
+    //       RNFetchBlob.fs
+    //         .exists(newFileDir + '/cacheVideo')
+    //         .then(exist => {
+    //           console.log(exist ? 'Exist' : 'doest');
+    //           if (!exist) {
+    //             RNFetchBlob.fs.createFile(
+    //               newFileDir + '/cacheVideo',
+    //               RNFetchBlob.base64.encode(''),
+    //               'base64',
+    //             );
+    //           }
+    //         })
+    //         .catch(() => {});
+    //       // RNFetchBlob.fs.createFile(
+    //       //   newFileDir + '/cacheVideo',
+    //       //   RNFetchBlob.base64.encode(data),
+    //       //   'base64',
+    //       // );
+    //       // RNFetchBlob.fs.writeStream(newFileDir, 'base64').then(stream => {
+    //       //   stream.write(RNFetchBlob.base64.encode(data));
+    //       //   return stream.close();
+    //       // });
+    //     });
+    //     stream.onEnd(() => {
+    //       const decodedData = RNFetchBlob.base64.decode(data);
+    //       console.log(decodedData,"Decoded Data")
+    //       // RNFetchBlob.fs
+    //       //   .exists(newFileDir + '/cacheVideo')
+    //       //   .then(exist => {
+    //       //     if (exist) {
+    //       //       RNFetchBlob.fs
+    //       //         .writeStream(newFileDir + '/cacheVideo', 'base64')
+    //       //         .then(async stream => {
+    //       //           const decryptedvideo = stream.write(decodedData);
+    //       //           console.log(await decryptedvideo);
+    //       //           return stream.close();
+    //       //         });
+    //       //     }
+    //       //     console.log(`file ${exist ? '' : 'not'} exists`);
+    //       //   })
+    //       //   .catch(() => {});
+    //     });
+    //   });
+
+    // RNFetchBlob.fs.readFile(encSmallFile, 'base64').then(async data => {
+    //   // handle the data ..
+    //   let decryptedData: any;
+    //   console.log(data, 'Encoded and Encrypted String');
+    //   const decodedData = RNFetchBlob.base64.decode(data);
+    //   console.log(decodedData, 'Decoded and Encrypted String');
+    //   let bytes = CryptoJS.AES.decrypt(decodedData, 'Ajay');
+    //   console.log(bytes, 'Decoded and Decrpyted, Bytes ===>');
+    //   decryptedData = bytes.toString(CryptoJS.enc.Utf8);
+    //   console.log(decryptedData, 'Decrypted Data');
+    //   setBase64(decryptedData);
+    //   RNFetchBlob.fs.writeStream(decSmallFile, 'base64').then(async stream => {
+    //     const decryptedvideo = stream.write(decryptedData);
+    //     console.log(await decryptedvideo);
+    //     return stream.close();
+    //   });
+    //   console.log(decryptedData);
+    // });
   };
   const handleOpen = () => {
     setIsOpen(true);
     // setShowModal(true);
   };
   const ref = useRef();
-  const format = seconds => {
+  const format = (seconds: number) => {
     let mins = parseInt(seconds / 60)
       .toString()
       .padStart(2, '0');
@@ -100,8 +284,45 @@ const VideoLinkInput = ({link}) => {
       console.log(err);
     }
   };
+  const requestReadStoragePermission = async () => {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        {
+          title: 'Storage Permission to Read',
+          message:
+            'App needs Read to your Storage ' + 'so you can take Read Videos.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        },
+      );
+      console.log(granted);
+      let notificationsPermissionCheck: PermissionStatus = 'granted';
+      if (Platform.Version >= '33') {
+        notificationsPermissionCheck = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+      }
+      console.log(
+        'notificationsPermissionCheck:',
+        notificationsPermissionCheck,
+      );
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        console.log('You can Read the Storage');
+        encryptVideo();
+      } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        // openSettings()
+        encryptVideo();
+      } else {
+        alert('Storage permission denied');
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
-  const downloadFile = () => {
+  const downloadFile = async () => {
     config({
       // add this option that makes response data to be stored as a file,
       // this is much more performant.
@@ -109,61 +330,32 @@ const VideoLinkInput = ({link}) => {
       addAndroidDownloads: {
         useDownloadManager: true,
         notification: true,
-        path: fileDir + '/download' + '.mp4',
-        description: 'file download',
+        path: fileDir + '/smallVideo.temp',
+        description: 'Encrypted File Download',
       },
     })
       .fetch('GET', link)
-      .then(res => {
+      .then(async res => {
+        let status = res.info().status;
+        console.log(res, 'Res');
+        // let base64Str = await res.base64();
+        // setBase64(base64Str)
+        // console.log(base64Str, 'Base64 String');
+        if (status == 200) {
+          // the conversion is done in native code
+          let base64Str = res.base64();
+          console.log(base64Str, 'Base64 String');
+          // the following conversions are done in js, it's SYNC
+          let text = res.text();
+          console.log(text, 'Text');
+          let json = res.json();
+        } else {
+          // handle other status codes
+        }
         // the temp file path
         console.log('The file saved to ', res.path());
         alert('file downloaded successfully ');
       });
-  };
-  let data = [{id: 1}, {id: 2}];
-  let ciphertext: any;
-  const encryptVideo = () => {
-    console.log('Encryt Funct');
-
-    // Encrypt
-    ciphertext = CryptoJS.AES.encrypt(
-      JSON.stringify(data),
-      'sdgroup',
-    ).toString();
-    console.log(ciphertext, 'Encrypt');
-
-    // Read the video file
-    // console.log(videoPath, 'VideoPath');
-    // RNFetchBlob.fs.readStream(videoPath, 'utf8', 4048).then(stream => {
-    //   let data = '';
-    //   console.log(stream);
-    //   stream.open();
-    //   stream.onData(chunk => {
-    //     console.log(chunk, 'chunk');
-    //     data += chunk;
-    //   });
-    //   stream.onEnd(() => {
-    //     console.log(data);
-    //   });
-    // });
-    // const videoData = await fs
-    //   .readStream(videoPath, 'base64')
-    //   .then((e: any) => {
-    //     console.log(e);
-    //   });
-    // Encrypt the video data
-    // const encryptedData = CryptoJS.AES.encrypt(
-    //   videoData,
-    //   encryptionKey,
-    // ).toString();
-    // console.log(encryptedData, "Encrypted Data")
-  };
-  const decryptData = () => {
-    // Decrypt
-    let bytes = CryptoJS.AES.decrypt(ciphertext, 'sdgroup');
-    let decryptedData = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-
-    console.log(decryptedData); // [{id: 1}, {id: 2}]
   };
 
   const onVideoClick = () => {
@@ -185,16 +377,17 @@ const VideoLinkInput = ({link}) => {
         <TouchableOpacity onPress={onVideoClick}>
           <Video
             paused={puased}
+            muted
             source={{
+              uri: decryptFile,
               // uri: link,
-              uri: videoPath,
+              // uri:`data:video/mp4;base64,${base64}`
             }}
             style={{
               width: '100%',
               height: fullScreen ? 350 : 220,
             }}
             rate={speed}
-            // muted
             ref={ref}
             onProgress={x => {
               setProgress(x);
@@ -217,7 +410,7 @@ const VideoLinkInput = ({link}) => {
               <View style={{flexDirection: 'row'}}>
                 <TouchableOpacity
                   onPress={() => {
-                    ref.current.seek(parseInt(progress.currentTime) - 10);
+                    ref?.current.seek(parseInt(progress?.currentTime) - 10);
                   }}>
                   <Image
                     source={require('../../assets/backward.png')}
@@ -244,7 +437,7 @@ const VideoLinkInput = ({link}) => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
-                    ref.current.seek(parseInt(progress.currentTime) + 10);
+                    ref.current.seek(parseInt(progress?.currentTime) + 10);
                   }}>
                   <Image
                     source={require('../../assets/forward.png')}
@@ -272,18 +465,18 @@ const VideoLinkInput = ({link}) => {
                 <VStack width={'100%'}>
                   <HStack>
                     <Text style={{color: 'white'}}>
-                      {format(progress.currentTime)}/
+                      {format(progress?.currentTime)}/
                     </Text>
                     <Text style={{color: 'white'}}>
-                      {format(progress.seekableDuration)}
+                      {format(progress?.seekableDuration)}
                     </Text>
                   </HStack>
 
                   <Slider
-                    value={progress.currentTime}
+                    value={progress?.currentTime}
                     style={{width: '80%', height: 40}}
                     minimumValue={0}
-                    maximumValue={progress.seekableDuration}
+                    maximumValue={progress?.seekableDuration}
                     minimumTrackTintColor="#FFFFFF"
                     maximumTrackTintColor="#fff"
                     onValueChange={x => {
@@ -409,7 +602,7 @@ const VideoLinkInput = ({link}) => {
         </Box>
         <Box justifyContent="flex-end">
           <Button
-            onPress={encryptVideo}
+            onPress={requestReadStoragePermission}
             size="lg"
             variant="solid"
             action="positive"
@@ -430,11 +623,11 @@ const VideoLinkInput = ({link}) => {
           </Button>
         </Box>
       </View>
-      <Box display='flex' justifyContent='center' alignItems='center'>
+      <Box display="flex" justifyContent="center" alignItems="center">
         <Text>Object Data</Text>
-        {data.map((e,i) => (
+        {/* {data.map((e, i) => (
           <Text key={i}>{e.id}</Text>
-        ))}
+        ))} */}
         <Text>{ciphertext}</Text>
       </Box>
       {/* <Box>

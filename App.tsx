@@ -7,9 +7,11 @@ import {config} from '@gluestack-ui/config';
 import Header from './src/components/Header.tsx';
 import YTPlayer from './src/components/YTPlayer.tsx';
 function App() {
+  
   const connectToRemoteDebugger = () => {
     NativeDevSettings.setIsDebuggingRemotely(true);
   };
+  // connectToRemoteDebugger()
 
   return (
     <GluestackUIProvider config={config}>
@@ -22,7 +24,8 @@ function App() {
         {/* <Header /> */}
         <ScrollView width={'100%'} rowGap={50}>
           {/* <YTPlayer /> */}
-          <VideoLinkInput link="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4" />
+          {/* <VideoLinkInput link="https://docs.evostream.com/sample_content/assets/nosound.mp4" /> */}
+          <VideoLinkInput link="https://storage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4"/>
         </ScrollView>
       </View>
     </GluestackUIProvider>
